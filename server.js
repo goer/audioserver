@@ -74,7 +74,7 @@ function saveAudioData(data,cb){
 	return fout;
 
 }
-var ENV = process.env.NODE_ENV || 'development';
+var ENV = 'development';
 
 app.set('port', process.env.OPENSHIFT_NODEJS_PORT || 7070);
 app.set('ipaddr', process.env.OPENSHIFT_NODEJS_IP || "0.0.0.0");
