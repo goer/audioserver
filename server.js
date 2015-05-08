@@ -1,159 +1,169 @@
-#!/bin/env node
-//  OpenShift sample Node application
-var express = require('express');
-var fs      = require('fs');
+// var JSData = require('js-data');
+// var DSHttpAdapter = require('js-data-http');
+
+// var adapter = new DSHttpAdapter();
+// adapter.defaults.basePath = 'http://192.168.35.126:2403/';
 
 
-/**
- *  Define the sample application.
- */
-var SampleApp = function() {
-
-    //  Scope.
-    var self = this;
-
-
-    /*  ================================================================  */
-    /*  Helper functions.                                                 */
-    /*  ================================================================  */
-
-    /**
-     *  Set up server IP address and port # using env variables/defaults.
-     */
-    self.setupVariables = function() {
-        //  Set the environment variables we need.
-        self.ipaddress = process.env.OPENSHIFT_NODEJS_IP;
-        self.port      = process.env.OPENSHIFT_NODEJS_PORT || 8080;
-
-        if (typeof self.ipaddress === "undefined") {
-            //  Log errors on OpenShift but continue w/ 127.0.0.1 - this
-            //  allows us to run/test the app locally.
-            console.warn('No OPENSHIFT_NODEJS_IP var, using 127.0.0.1');
-            self.ipaddress = "127.0.0.1";
-        };
-    };
+// var chat = new JSData.DS();
+// chat.registerAdapter(
+// 	'http', 
+// 	adapter, 
+// 		{ 	default: true,
+// 		}
+// 	);
+// var Message = chat.defineResource('message');
+// Message.findAll({ roomid: "123" }).then(function(ms){
+// 	array.forEach(ms,function(v,k){
+// 		console.log("m:"+v.id);
+// 	});
+// })
 
 
-    /**
-     *  Populate the cache.
-     */
-    self.populateCache = function() {
-        if (typeof self.zcache === "undefined") {
-            self.zcache = { 'index.html': '' };
-        }
+// var Restangular=require('node-restangular');
 
-        //  Local cache for static content.
-        self.zcache['index.html'] = fs.readFileSync('./index.html');
-    };
+// Restangular.setBaseUrl('http://192.168.35.126:2403/');
+// Restangular.all('message').getList().then(function(msgs){
+// 	console.log("msgs:"+msgs);
+// })
 
 
-    /**
-     *  Retrieve entry (content) from cache.
-     *  @param {string} key  Key identifying content to retrieve from cache.
-     */
-    self.cache_get = function(key) { return self.zcache[key]; };
+// var unirest = require('unirest');
+// var _ = require('underscore');
+// unirest.get('http://192.168.35.126:2403/message').end(function(response){
+// 		console.log("status:"+response.status);
+// 		if(response.status===200){
+// 			res.status=200;
+// 			res.body=response.body;
+// 			// _.each(response.body,function(v, k){
+// 			// 	console.log("message:"+v.id);
+// 			// });
+// 		}
+// 	});
+
+// express = require('express');
+// app = require('express.io')();
+// app.http().io();
+// var fs=require('fs');
+// var bodyParser = require('body-parser');
+// var jsonParser = bodyParser.json();
 
 
-    /**
-     *  terminator === the termination handler
-     *  Terminate server on receipt of the specified signal.
-     *  @param {string} sig  Signal to terminate on.
-     */
-    self.terminator = function(sig){
-        if (typeof sig === "string") {
-           console.log('%s: Received %s - terminating sample app ...',
-                       Date(Date.now()), sig);
-           process.exit(1);
-        }
-        console.log('%s: Node server stopped.', Date(Date.now()) );
-    };
+var express = require('express')
+    , app = express()
+    , server = require('http').createServer(app)
+    , io = require("socket.io").listen(server);
+
+function saveAudioData(data,cb){
+
+	var buf = new Buffer(data, 'base64'); 
+	var uuid = require('uuid');
+	var fin = '/tmp/'+uuid.v4()+'.wav';
+	var fout = uuid.v4()+'.mp3';
+	var fs=require('fs');
+	var input = fs.createWriteStream(fin);
+	input.write(buf);
+	input.end();
+	var child_process= require('child_process');
+	var ffmpeg = child_process.spawn('ffmpeg', [ '-v', 'debug', '-i', fin, '-f', 'mp3', '-y', 'public/audio/'+fout]);
+	ffmpeg.stderr.on('close', function() {
+	    console.log('...closing time! bye');
+	    fs.unlink(fin);
+	    cb();
+	});
+	return fout;
+
+}
+var ENV = process.env.NODE_ENV || 'development';
+
+app.set('port', process.env.OPENSHIFT_NODEJS_PORT || 7070);
+app.set('ipaddr', process.env.OPENSHIFT_NODEJS_IP || "0.0.0.0");
+app.use(express.static(__dirname + '/public'));	
+
+app.use(express.bodyParser());
+app.use(express.methodOverride());
+
+// setup deployd
+//MongoDB 2.4 database added.  Please make note of these credentials:
+//
+//	Root User:     admin
+//Root Password: hTUSfXHY-Fbq
+//Database Name: audioserver
+//
+//Connection URL: mongodb://$OPENSHIFT_MONGODB_DB_HOST:$OPENSHIFT_MONGODB_DB_PORT/
+//URL:        http://audioserver-fonetix.rhcloud.com/
+//SSH to:     554c9bf94382ec6feb00001f@audioserver-fonetix.rhcloud.com
+//Git remote: ssh://554c9bf94382ec6feb00001f@audioserver-fonetix.rhcloud.com/~/git/audioserver.git/
+//Cloned to:  /Users/goer/projects/testaudio/server/audioserver
 
 
-    /**
-     *  Setup termination handlers (for exit and a list of signals).
-     */
-    self.setupTerminationHandlers = function(){
-        //  Process on exit and signals.
-        process.on('exit', function() { self.terminator(); });
-
-        // Removed 'SIGPIPE' from the list - bugz 852598.
-        ['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT',
-         'SIGBUS', 'SIGFPE', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGTERM'
-        ].forEach(function(element, index, array) {
-            process.on(element, function() { self.terminator(element); });
-        });
-    };
+require('deployd').attach(server, {
+	socketIo: io,  // if not provided, attach will create one for you.
+	env: ENV,
+	db: {
+		host: process.env.OPENSHIFT_MONGODB_DB_HOST || 'localhost' ,
+		port: process.env.OPENSHIFT_MONGODB_DB_PORT || 27017,
+		name: 'audioserver',
+		credentials : {
+			username: process.env.OPENSHIFT_MONGODB_DB_USERNAME ,
+			password: process.env.OPENSHIFT_MONGODB_DB_PASSWORD
+		}
 
 
-    /*  ================================================================  */
-    /*  App server functions (main app logic here).                       */
-    /*  ================================================================  */
+	}
+});
+// After attach, express can use server.handleRequest as middleware
+app.use(server.handleRequest);
 
-    /**
-     *  Create the routing table entries + handlers for the application.
-     */
-    self.createRoutes = function() {
-        self.routes = { };
-
-        self.routes['/asciimo'] = function(req, res) {
-            var link = "http://i.imgur.com/kmbjB.png";
-            res.send("<html><body><img src='" + link + "'></body></html>");
-        };
-
-        self.routes['/'] = function(req, res) {
-            res.setHeader('Content-Type', 'text/html');
-            res.send(self.cache_get('index.html') );
-        };
-    };
-
-
-    /**
-     *  Initialize the server (express) and create the routes and register
-     *  the handlers.
-     */
-    self.initializeServer = function() {
-        self.createRoutes();
-        self.app = express.createServer();
-
-        //  Add handlers for the app (from the routes).
-        for (var r in self.routes) {
-            self.app.get(r, self.routes[r]);
-        }
-    };
-
-
-    /**
-     *  Initializes the sample application.
-     */
-    self.initialize = function() {
-        self.setupVariables();
-        self.populateCache();
-        self.setupTerminationHandlers();
-
-        // Create the express server and routes.
-        self.initializeServer();
-    };
-
-
-    /**
-     *  Start the server (starts up the sample application).
-     */
-    self.start = function() {
-        //  Start the app on the specific interface (and port).
-        self.app.listen(self.port, self.ipaddress, function() {
-            console.log('%s: Node server started on %s:%d ...',
-                        Date(Date.now() ), self.ipaddress, self.port);
-        });
-    };
-
-};   /*  Sample Application.  */
+// app.use(function (req, res, next) {
+// 		res.header("Access-Control-Allow-Origin", "*");
+//         res.header("Access-Control-Allow-Headers", "X-Requested-With");
+//         res.header("Access-Control-Allow-Headers", "Content-Type");
+//         res.header("Access-Control-Allow-Methods", "PUT, GET, POST, DELETE, OPTIONS");
+//         next();
+//     }
+// );
 
 
 
-/**
- *  main():  Main code.
- */
-var zapp = new SampleApp();
-zapp.initialize();
-zapp.start();
+io.on('connection', function(s) {
+
+	console.dir("New User");
+	s.emit('connected',{status:200,message: 'connected'})
+
+	s.on('join',function(data){
+		console.log('user:'+data.userid+' join room:'+data.roomid);
+		s.join(data.roomid);
+	})
+
+	s.on('leave',function(data){
+		console.log('user:'+data.userid+' join room:'+data.roomid);
+		s.leave(data.roomid);
+	})
+
+	s.on('message',function(data){
+		console.log('user:'+data.userid+' join room:'+data.roomid+' content:'+data.content);
+		io.sockets.in(data.roomid).emit('message', data);
+	})
+
+
+})
+
+app.post('/messageaudio/:roomId', function(req, res) {
+
+	if (!req.body) return res.sendStatus(400);
+	var data = req.body;
+	fo = saveAudioData(data.content,function(){
+		io.sockets.in(data.roomid).emit('message',{ content: fo,  typeid: 4, userid: data.userid });
+	});	
+	res.json({ statusid: 200 });
+
+});
+
+
+
+
+server.listen(app.get('port'), app.get('ipaddr'), function(){
+    console.log('Express server listening on  IP: ' + app.get('ipaddr') + ' and port ' + app.get('port'));
+});
 
