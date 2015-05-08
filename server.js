@@ -104,10 +104,11 @@ require('deployd').attach(server, {
 		host: process.env.OPENSHIFT_MONGODB_DB_HOST || 'localhost' ,
 		port: process.env.OPENSHIFT_MONGODB_DB_PORT || 27017,
 		name: 'audioserver',
-		credentials : {
-			username: process.env.OPENSHIFT_MONGODB_DB_USERNAME ,
-			password: process.env.OPENSHIFT_MONGODB_DB_PASSWORD
-		}
+
+		//credentials : {
+		//	username: process.env.OPENSHIFT_MONGODB_DB_USERNAME || '',
+		//	password: process.env.OPENSHIFT_MONGODB_DB_PASSWORD || ''
+		//}
 
 
 	}
