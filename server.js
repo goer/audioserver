@@ -52,7 +52,10 @@
 var express = require('express')
     , app = express()
     , server = require('http').createServer(app)
-    , io = require("socket.io").listen(server);
+    , io = require("socket.io").listen(server)
+	, util = require('util')
+	, bodyParser = require('body-parser')
+	;
 
 function saveAudioData(data,cb){
 
@@ -67,9 +70,9 @@ function saveAudioData(data,cb){
 	var child_process= require('child_process');
 	var ffmpeg = child_process.spawn('ffmpeg', [ '-v', 'debug', '-i', fin, '-f', 'mp3', '-y', 'public/audio/'+fout]);
 	ffmpeg.stderr.on('close', function() {
-	    console.log('...closing time! bye');
+	    console.log('Saving OK: '+fout);
 	    fs.unlink(fin);
-	    cb();
+	    cb(fout);
 	});
 	return fout;
 
@@ -80,8 +83,37 @@ app.set('port', process.env.OPENSHIFT_NODEJS_PORT || 7070);
 app.set('ipaddr', process.env.OPENSHIFT_NODEJS_IP || "0.0.0.0");
 app.use(express.static(__dirname + '/public'));	
 
-app.use(express.bodyParser());
-app.use(express.methodOverride());
+//app.use(express.bodyParser());
+//app.use(express.methodOverride());
+
+//app.use(bodyParser.urlencoded());
+//app.use(bodyParser.json());
+
+
+app.use('/api/audio',bodyParser.json());
+app.get('/api/audio/test', function(req, res) {
+	console.log('Receive Audio Message:')
+	res.json({statusid:200, content:'cool !'});
+});
+
+app.post('/api/audio/messageaudio', function(req, res) {
+
+	console.log('Receive Audio Message:')
+	var uuid = require('uuid');
+	//if (!req.body) return res.json({id:uuid.v4(),statusid:400});
+	//console.log('BODY:'+JSON.stringify( util.inspect(req) ));
+	//var data = JSON.parse(req.body);
+	var data = req.body;
+	var m={id:uuid.v4(), statusid:200, roomid: data.roomid,   typeid: 2, userid: data.userid }
+	saveAudioData(data.content,function(fo){
+		m.content= fo
+		io.sockets.in(data.roomid).emit('message',m);
+		console.log('Audio OK:'+JSON.stringify(m))
+		res.json(m);
+	});
+
+});
+
 
 // setup deployd
 //MongoDB 2.4 database added.  Please make note of these credentials:
@@ -103,17 +135,19 @@ require('deployd').attach(server, {
 	db: {
 		host: process.env.OPENSHIFT_MONGODB_DB_HOST || 'localhost' ,
 		port: process.env.OPENSHIFT_MONGODB_DB_PORT || 27017,
-		name: 'audioserver',
-		credentials : {
-			username: 'admin',
-			password: 'hTUSfXHY-Fbq'
-		}
+		name: '-deployd',
+		//name: 'audioserver',
+		//credentials : {
+		//	username: 'admin',
+		//	password: 'hTUSfXHY-Fbq'
+		//}
 
 
 	}
 });
 // After attach, express can use server.handleRequest as middleware
 app.use(server.handleRequest);
+
 
 // app.use(function (req, res, next) {
 // 		res.header("Access-Control-Allow-Origin", "*");
@@ -125,42 +159,28 @@ app.use(server.handleRequest);
 // );
 
 
-
 io.on('connection', function(s) {
 
 	console.dir("New User");
 	s.emit('connected',{status:200,message: 'connected'})
 
 	s.on('join',function(data){
-		console.log('user:'+data.userid+' join room:'+data.roomid);
+		console.log('Join user:'+data.userid+' join room:'+data.roomid);
 		s.join(data.roomid);
 	})
 
 	s.on('leave',function(data){
-		console.log('user:'+data.userid+' join room:'+data.roomid);
+		console.log('Leave user:'+data.userid+' join room:'+data.roomid);
 		s.leave(data.roomid);
 	})
 
 	s.on('message',function(data){
-		console.log('user:'+data.userid+' join room:'+data.roomid+' content:'+data.content);
-		io.sockets.in(data.roomid).emit('message', data);
+		console.log('Message user:'+data.userid+'  room:'+data.roomid+' content:'+data.content);
+		s.emit('message', data);
 	})
 
 
 })
-
-app.post('/messageaudio/:roomId', function(req, res) {
-
-	if (!req.body) return res.sendStatus(400);
-	var data = req.body;
-	fo = saveAudioData(data.content,function(){
-		io.sockets.in(data.roomid).emit('message',{ content: fo,  typeid: 4, userid: data.userid });
-	});	
-	res.json({ statusid: 200 });
-
-});
-
-
 
 
 server.listen(app.get('port'), app.get('ipaddr'), function(){
