@@ -1,93 +1,20 @@
-// var JSData = require('js-data');
-// var DSHttpAdapter = require('js-data-http');
-
-// var adapter = new DSHttpAdapter();
-// adapter.defaults.basePath = 'http://192.168.35.126:2403/';
-
-
-// var chat = new JSData.DS();
-// chat.registerAdapter(
-// 	'http', 
-// 	adapter, 
-// 		{ 	default: true,
-// 		}
-// 	);
-// var Message = chat.defineResource('message');
-// Message.findAll({ roomid: "123" }).then(function(ms){
-// 	array.forEach(ms,function(v,k){
-// 		console.log("m:"+v.id);
-// 	});
-// })
-
-
-// var Restangular=require('node-restangular');
-
-// Restangular.setBaseUrl('http://192.168.35.126:2403/');
-// Restangular.all('message').getList().then(function(msgs){
-// 	console.log("msgs:"+msgs);
-// })
-
-
-// var unirest = require('unirest');
-// var _ = require('underscore');
-// unirest.get('http://192.168.35.126:2403/message').end(function(response){
-// 		console.log("status:"+response.status);
-// 		if(response.status===200){
-// 			res.status=200;
-// 			res.body=response.body;
-// 			// _.each(response.body,function(v, k){
-// 			// 	console.log("message:"+v.id);
-// 			// });
-// 		}
-// 	});
-
-// express = require('express');
-// app = require('express.io')();
-// app.http().io();
-// var fs=require('fs');
-// var bodyParser = require('body-parser');
-// var jsonParser = bodyParser.json();
-
-
 var express = require('express')
     , app = express()
     , server = require('http').createServer(app)
     , io = require("socket.io").listen(server)
 	, util = require('util')
 	, bodyParser = require('body-parser')
+	, cfg = require('./config.js')
+	, config = cfg.getConfig()
+	, logic = require('./logic.js')
 	;
 
-function saveAudioData(data,cb){
 
-	var buf = new Buffer(data, 'base64'); 
-	var uuid = require('uuid');
-	var fin = '/tmp/'+uuid.v4()+'.wav';
-	var fout = uuid.v4()+'.mp3';
-	var fs=require('fs');
-	var input = fs.createWriteStream(fin);
-	input.write(buf);
-	input.end();
-	var child_process= require('child_process');
-	var ffmpeg = child_process.spawn('ffmpeg', [ '-v', 'debug', '-i', fin, '-f', 'mp3', '-y', 'public/audio/'+fout]);
-	ffmpeg.stderr.on('close', function() {
-	    console.log('Saving OK: '+fout);
-	    fs.unlink(fin);
-	    cb(fout);
-	});
-	return fout;
-
-}
 var ENV = 'development';
 
-app.set('port', process.env.OPENSHIFT_NODEJS_PORT || 7070);
-app.set('ipaddr', process.env.OPENSHIFT_NODEJS_IP || "0.0.0.0");
+app.set('port', config.server.port);
+app.set('ipaddr', config.server.ip);
 app.use(express.static(__dirname + '/public'));	
-
-//app.use(express.bodyParser());
-//app.use(express.methodOverride());
-
-//app.use(bodyParser.urlencoded());
-//app.use(bodyParser.json());
 
 
 app.use('/api/audio',bodyParser.json());
@@ -96,18 +23,18 @@ app.get('/api/audio/test', function(req, res) {
 	res.json({statusid:200, content:'cool !'});
 });
 
+
 app.post('/api/audio/messageaudio', function(req, res) {
 
 	console.log('Receive Audio Message:')
 	var uuid = require('uuid');
-	//if (!req.body) return res.json({id:uuid.v4(),statusid:400});
-	//console.log('BODY:'+JSON.stringify( util.inspect(req) ));
-	//var data = JSON.parse(req.body);
 	var data = req.body;
-	var m={id:uuid.v4(), statusid:200, roomid: data.roomid,   typeid: 2, userid: data.userid }
+	var m={ id:uuid.v4(), statusid:200, roomid: data.roomid,   typeid: 2, userid: data.userid }
 	saveAudioData(data.content,function(fo){
 		m.content= fo
-		io.sockets.in(data.roomid).emit('message',m);
+		//io.sockets.in(data.roomid).emit('message',m);
+		logic.saveVoiceMessage(m);
+		logic.pushMessage(m);
 		console.log('Audio OK:'+JSON.stringify(m))
 		res.json(m);
 	});
@@ -132,18 +59,8 @@ app.post('/api/audio/messageaudio', function(req, res) {
 require('deployd').attach(server, {
 	socketIo: io,  // if not provided, attach will create one for you.
 	env: ENV,
-	db: {
-		host: process.env.OPENSHIFT_MONGODB_DB_HOST || 'localhost' ,
-		port: process.env.OPENSHIFT_MONGODB_DB_PORT || 27017,
-		//name: '-deployd',
-		name: 'audioserver',
-		credentials : {
-			username: 'admin',
-			password: 'hTUSfXHY-Fbq'
-		}
-
-
-	}
+	db: config.db
+	
 });
 // After attach, express can use server.handleRequest as middleware
 app.use(server.handleRequest);
@@ -176,7 +93,7 @@ io.on('connection', function(s) {
 
 	s.on('message',function(data){
 		console.log('Message user:'+data.userid+'  room:'+data.roomid+' content:'+data.content);
-		s.emit('message', data);
+		s.broadcast.to(data.roomid).emit('message', data);
 	})
 
 
