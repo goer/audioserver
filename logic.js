@@ -7,6 +7,26 @@ dpd.message = dpd("/message")
 dpd.member = dpd('/member')
 
 var Q = require('q');
+var uuid = require('uuid');
+var fs=require('fs');
+var child_process= require('child_process');
+
+exports.saveAudioData = function(data,cb){
+
+	var buf = new Buffer(data, 'base64');
+	var fin = '/tmp/'+uuid.v4()+'.wav';
+	var fout = uuid.v4()+'.mp3';
+	var input = fs.createWriteStream(fin);
+	input.write(buf);
+	input.end();
+	var ffmpeg = child_process.spawn('ffmpeg', [ '-v', 'debug', '-i', fin, '-f', 'mp3', '-y', 'public/audio/'+fout]);
+	ffmpeg.stderr.on('close', function() {
+	    console.log('Saving OK: '+fout);
+	    fs.unlink(fin);
+	    cb(fout);
+	});
+	return fout;
+}
 
 exports.saveVoiceMessage = function(msg){
 
