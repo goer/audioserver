@@ -10,6 +10,8 @@ var Q = require('q');
 var uuid = require('uuid');
 var fs=require('fs');
 var child_process= require('child_process');
+var gcm = require('node-gcm');
+
 
 exports.saveAudioData = function(data,cb){
 
@@ -63,7 +65,7 @@ exports.saveVoiceMessage = function(msg){
 function pushToDeviceAndroid(deviceToken,data){
 	console.log('Start pushToDeviceAndroid')
 	var d=Q.defer();
-	var gcm = require('node-gcm');
+	
 	var message = new gcm.Message({
 	    collapseKey: 'pttserver',
 	    delayWhileIdle: true,
@@ -75,6 +77,7 @@ function pushToDeviceAndroid(deviceToken,data){
 	var registrationIds = [];
 	registrationIds.push(deviceToken.token);
 	var sender = new gcm.Sender('AIzaSyD2AQDi6a0TPX-kGnbyFbj4VF3WrmwVpj8');
+	console.log('GCM Sender: msg:'+JSON.stringify(message)+' regids:'+registrationIds);
 	sender.send(message, registrationIds, 10, function (err, result) {
 	  	if(err){
 	  		console.error(err);
