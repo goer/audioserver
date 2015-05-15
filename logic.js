@@ -102,7 +102,7 @@ exports.pushMessage = function(data){
 				if(dt.devicetype==='android'){
 					//do push for android
 					console.log('push to token:'+dt.token);
-					d.resolve(pushToDeviceAndroid(deviceToken,data))
+					d.resolve(pushToDeviceAndroid(dt,data))
 				}
 			})
 		})
