@@ -34,8 +34,11 @@ app.post('/api/audio/messageaudio', function(req, res) {
 		m.content= fo
 		//io.sockets.in(data.roomid).emit('message',m);
 		logic.saveVoiceMessage(m);
-		logic.pushMessage(m);
-		console.log('Audio OK:'+JSON.stringify(m))
+		logic.pushMessage(m).then(function(r){
+			console.log('Audio OK:'+JSON.stringify(r))
+		}).catch(err){
+			console.log('Audio Send Failed:'+err);
+		}
 		res.json(m);
 	});
 
